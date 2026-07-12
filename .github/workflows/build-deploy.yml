@@ -1,0 +1,85 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build_desktop -A x64
+      - name: Build
+        run: cmake --build build_desktop --config Release
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch GLM headers
+        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git external/glm
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Build web target
+        run: |
+          mkdir -p web
+          emcc -std=c++17 \
+            Scene/main.cpp \
+            Scene/Renderer.cpp \
+            Scene/Fan.cpp \
+            Scene/Transform.cpp \
+            -IScene \
+            -Iexternal/glm \
+            -DUSE_GLFW \
+            -s USE_GLFW=3 \
+            -s USE_WEBGL2=1 \
+            -s FULL_ES3=1 \
+            -s WASM=1 \
+            -s INITIAL_MEMORY=67108864 \
+            --preload-file android/app/src/main/assets/shader@assets/shader \
+            -o web/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy-pages:
+    needs: build-web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
