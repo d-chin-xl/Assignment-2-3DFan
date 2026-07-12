@@ -24,10 +24,12 @@ jobs:
       - name: Build
         run: cmake --build build_desktop --config Release
 
-  build-android:
+build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch GLM headers
+        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git external/glm
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
