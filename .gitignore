@@ -1,0 +1,13 @@
+build_desktop/
+build-web/
+web/
+android/app/build/
+android/app/.cxx/
+android/.gradle/
+android/.idea/
+android/local.properties
+emsdk/
+external/
+*.log
+.vs/
+android/build/
