@@ -1,80 +1,108 @@
 name: Build and Deploy
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: "pages"
   cancel-in-progress: false
-
 jobs:
-  build-desktop:
+  # ---------------------------------------------------------------------
+  # Windows desktop — builds both quizzes' CMakeLists.txt via MSVC
+  # ---------------------------------------------------------------------
+  build-desktop-windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        quiz: ["Android Programming Quiz 2", "Android Programming Quiz 3"]
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build_desktop -A x64
+        run: cmake -S "${{ matrix.quiz }}" -B "build_${{ matrix.quiz }}" -A x64
       - name: Build
-        run: cmake --build build_desktop --config Release
+        run: cmake --build "build_${{ matrix.quiz }}" --config Release
 
+  # ---------------------------------------------------------------------
+  # Unix desktop — same CMakeLists.txt, builds and links on ubuntu-latest
+  # ---------------------------------------------------------------------
+  build-desktop-unix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        quiz: ["Android Programming Quiz 2", "Android Programming Quiz 3"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install X11/Wayland dev packages for GLFW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev wayland-protocols
+      - name: Configure
+        run: cmake -S "${{ matrix.quiz }}" -B "build_${{ matrix.quiz }}"
+      - name: Build
+        run: cmake --build "build_${{ matrix.quiz }}" --config Release
+
+  # ---------------------------------------------------------------------
+  # Android — Gradle/CMake build for each quiz's Android module
+  # ---------------------------------------------------------------------
   build-android:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        quiz: ["Android Programming Quiz 2", "Android Programming Quiz 3"]
     steps:
       - uses: actions/checkout@v4
       - name: Fetch GLM headers
-        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git external/glm
+        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git "${{ matrix.quiz }}/external/glm"
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
+        run: chmod +x "${{ matrix.quiz }}/android/gradlew"
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug
+        run: cd "${{ matrix.quiz }}/android" && ./gradlew assembleDebug
 
+  # ---------------------------------------------------------------------
+  # Web — builds Quiz 3's web target and deploys to GitHub Pages
+  # ---------------------------------------------------------------------
   build-web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Fetch GLM headers
-        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git external/glm
-
+        run: git clone --depth 1 --branch 1.0.1 https://github.com/g-truc/glm.git "Android Programming Quiz 3/external/glm"
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v14
-
       - name: Build web target
         run: |
           mkdir -p web
           emcc -std=c++17 \
-            Scene/main.cpp \
-            Scene/Renderer.cpp \
-            Scene/Fan.cpp \
-            Scene/Transform.cpp \
-            -IScene \
-            -Iexternal/glm \
+            "Android Programming Quiz 3/Scene/main.cpp" \
+            "Android Programming Quiz 3/Scene/Renderer.cpp" \
+            "Android Programming Quiz 3/Scene/Scene3D.cpp" \
+            "Android Programming Quiz 3/Scene/SceneHUD.cpp" \
+            "Android Programming Quiz 3/Scene/Fan.cpp" \
+            "Android Programming Quiz 3/Scene/Ground.cpp" \
+            "Android Programming Quiz 3/Scene/Transform.cpp" \
+            -I"Android Programming Quiz 3/Scene" \
+            -I"Android Programming Quiz 3/external/glm" \
             -DUSE_GLFW \
             -s USE_GLFW=3 \
             -s USE_WEBGL2=1 \
             -s FULL_ES3=1 \
             -s WASM=1 \
             -s INITIAL_MEMORY=67108864 \
-            --preload-file android/app/src/main/assets/shader@assets/shader \
+            --preload-file "Android Programming Quiz 3/android/app/src/main/assets/shader@assets/shader" \
             -o web/index.html
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: web
-
   deploy-pages:
     needs: build-web
     runs-on: ubuntu-latest
