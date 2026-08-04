@@ -29,17 +29,17 @@ jobs:
   # ---------------------------------------------------------------------
   # Unix desktop — same CMakeLists.txt, builds and links on ubuntu-latest
   # ---------------------------------------------------------------------
-  build-desktop-unix:
+build-desktop-unix:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         quiz: ["Android Programming Quiz 2", "Android Programming Quiz 3"]
     steps:
       - uses: actions/checkout@v4
-      - name: Install X11/Wayland dev packages for GLFW
+      - name: Install X11/Wayland/OpenGL dev packages for GLFW + GLEW
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev wayland-protocols
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev wayland-protocols libgl1-mesa-dev libglu1-mesa-dev
       - name: Configure
         run: cmake -S "${{ matrix.quiz }}" -B "build_${{ matrix.quiz }}"
       - name: Build
